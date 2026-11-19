@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KoreanEasy – AI Korean Helper</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--text:#1e2933;--muted:#687985;--line:#dde3ea;--accent:#173b59;--accent-text:#fff;--soft:#eaf1f7;--err:#b3261e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#12171c;--card:#1b222a;--text:#e8edf1;--muted:#93a3ae;--line:#2d3944;--accent:#7fb4e0;--accent-text:#0d1822;--soft:#22303c;--err:#ff8a80}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#12171c;--card:#1b222a;--text:#e8edf1;--muted:#93a3ae;--line:#2d3944;--accent:#7fb4e0;--accent-text:#0d1822;--soft:#22303c;--err:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:0;font-size:1.6rem;color:var(--accent)}
+.sub{color:var(--muted);margin:2px 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+label{font-weight:600;display:block;margin-bottom:6px}
+textarea,select{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea{min-height:140px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.row select{width:auto;flex:0 0 auto}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:9px 14px}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button:disabled{opacity:.55;cursor:default}
+h2{font-size:1.05rem;margin:0 0 8px;color:var(--accent)}
+.msg{color:var(--muted)}.err{color:var(--err)}
+ul,ol{margin:0;padding-left:20px}
+.word{margin-bottom:6px}.word b{font-size:1.05rem}
+.q{margin-bottom:12px}
+.ans{display:none;background:var(--soft);border-radius:8px;padding:8px 10px;margin-top:6px}
+.ans.show{display:block}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>📚 KoreanEasy</h1>
+  <p class="sub">Paste a Korean text. AI explains it in simple language, picks key words and makes a quiz. · Team Oreo</p>
+
+  <div class="card">
+    <label for="inp">Korean text</label>
+    <textarea id="inp" placeholder="예: 과제 제출 기한은 11월 30일 오후 11시 59분까지입니다. 지각 제출은 점수가 감점됩니다."></textarea>
+    <div class="row">
+      <select id="lang" aria-label="Output language">
+        <option value="English">English</option>
+        <option value="Uzbek">O’zbekcha</option>
+      </select>
+      <button class="primary" id="go">Explain</button>
+      <button id="ex" type="button">Use example</button>
+    </div>
+    <p class="msg" id="status" aria-live="polite"></p>
+  </div>
+
+  <div id="out" hidden>
+    <div class="card"><h2>Summary</h2><p id="sum"></p></div>
+    <div class="card"><h2>Key words</h2><div id="words"></div></div>
+    <div class="card"><h2>Quiz</h2><div id="quiz"></div></div>
+    <button id="copy" type="button">Copy result</button>
+  </div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const EXAMPLE="2026학년도 2학기 기말 과제는 11월 30일 오후 11시 59분까지 학습관리시스템(LMS)에 제출해야 합니다. 마감 이후 제출은 감점되며, 파일 형식은 docx 또는 pdf만 가능합니다.";
+let last=null;
+
+$("ex").onclick=()=>{ $("inp").value=EXAMPLE; };
+
+function render(r){
+  $("sum").textContent=r.summary;
+  const w=$("words"); w.textContent="";
+  r.words.forEach(x=>{
+    const d=document.createElement("div"); d.className="word";
+    const b=document.createElement("b"); b.textContent=x.ko;
+    d.append(b," – "+x.meaning+(x.note?" ("+x.note+")":""));
+    w.append(d);
+  });
+  const q=$("quiz"); q.textContent="";
+  r.quiz.forEach((x,i)=>{
+    const d=document.createElement("div"); d.className="q";
+    const p=document.createElement("div"); p.textContent=(i+1)+". "+x.question;
+    const a=document.createElement("div"); a.className="ans"; a.textContent="Answer: "+x.answer;
+    const b=document.createElement("button"); b.textContent="Show answer";
+    b.onclick=()=>{a.classList.toggle("show");b.textContent=a.classList.contains("show")?"Hide answer":"Show answer";};
+    d.append(p,b,a); q.append(d);
+  });
+  $("out").hidden=false;
+}
+
+$("go").onclick=async()=>{
+  const text=$("inp").value.trim(), st=$("status"), btn=$("go");
+  st.className="msg";
+  if(!text){st.textContent="Please paste a Korean text first.";st.className="msg err";return;}
+  btn.disabled=true; st.textContent="AI is reading your text…"; $("out").hidden=true;
+  try{
+    const resp=await fetch("/api/explain",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,lang:$("lang").value})});
+    const r=await resp.json();
+    if(!resp.ok&&!r.error){const er=new Error("server "+resp.status);throw er;}
+    if(r.error){st.textContent=r.error;st.className="msg err";return;}
+    if(!r.summary||!Array.isArray(r.words)||!Array.isArray(r.quiz)) throw new Error("bad format");
+    last=r; render(r); st.textContent="";
+  }catch(e){
+    st.textContent="Something went wrong. Please try again. ("+((e&&(e.code||e.message))||"unknown")+")";
+    st.className="msg err";
+  }finally{btn.disabled=false;}
+};
+
+$("copy").onclick=async()=>{
+  if(!last)return;
+  const t="Summary:\n"+last.summary+"\n\nKey words:\n"+last.words.map(w=>w.ko+" – "+w.meaning).join("\n")+"\n\nQuiz:\n"+last.quiz.map((q,i)=>(i+1)+". "+q.question+" → "+q.answer).join("\n");
+  try{await navigator.clipboard.writeText(t);$("copy").textContent="Copied ✓";}catch(e){$("copy").textContent="Copy failed";}
+  setTimeout(()=>$("copy").textContent="Copy result",1800);
+};
+</script>
+</body>
+</html>
